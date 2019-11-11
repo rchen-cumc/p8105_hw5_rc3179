@@ -89,3 +89,88 @@ study_pts %>%
 For whatever the outcome is, the patients in the experimental arm seem to have increasing values over time, a positive correlation with the experimental exposure over time. The control arm appears to have slightly lower values at baseline and have no clear correlation (or slightly negative correlation) over time.
 
 ## Problem 3
+
+```{r}
+#n = 30
+#beta0 = 2
+#beta1 = 0
+#variance = 50
+
+sim_regression = function(n = 30, beta0 = 2, beta1 = 0, variance = 50) {
+  
+  x1_data = tibble(
+    x = rnorm(n, mean = 0, sd = 1),
+    y = beta0 + beta1 * x + rnorm(n, 0, variance)
+  )
+  
+  ls_fit = lm(y ~ x, data = x1_data)
+  lm_p_values = ls_fit %>% broom::tidy() %>% pull(p.value)
+  
+  tibble(
+    beta0_hat = coef(ls_fit)[1],
+    beta1_hat = coef(ls_fit)[2],
+    p_value = lm_p_values[2]
+  )
+}
+```
+
+```{r}
+sim_results = 
+  tibble(
+    beta_1s = c(0,1,2,3,4,5,6)
+  ) %>% 
+  mutate(
+    output_list = map(.x = beta_1s, ~ rerun(10000, sim_regression(beta1 = .x))),
+    output_df = map(output_list, bind_rows)
+  ) %>% 
+  select(-output_list) %>% 
+  unnest(output_df)
+```
+
+Code producing the plot showing the proportion of times the null was rejected across different beta1's. The proportion of times that the null was rejected increased with increasing beta1's, which means that as effect size increases, power increases.
+```{r}
+sim_results %>% 
+  group_by(beta_1s) %>% 
+  summarize(proportion = (sum(p_value < 0.05)/n())) %>% 
+  ggplot(aes(x = beta_1s, y = proportion)) +
+  geom_col() +
+  labs(
+    title = "Proportion where null hypothesis was rejected (p < 0.05)",
+    x = "Beta 1",
+    y = "Proportion"
+  )
+```
+
+Plot showing average estimate of beta1_hat vs true beta1 grouped by whether or not the null was rejected
+```{r}
+sim_results %>% 
+  #select(beta_1s, beta1_hat) %>% 
+  mutate(
+    reject_null = p_value < 0.05
+  ) %>% 
+  ggplot(aes(x = beta_1s, y = beta1_hat, color = reject_null)) +
+  geom_point(alpha=0.5) +
+  labs(
+    title = "Average estimates of Beta1_hat across true Beta1's",
+    x = "Beta 1",
+    y = "Beta1_hat"
+  )
+```
+
+```{r}
+sim_results %>% 
+  #select(beta_1s, beta1_hat) %>% 
+  mutate(
+    reject_null = p_value < 0.05
+  ) %>% 
+  filter(reject_null == TRUE) %>% 
+  ggplot(aes(x = beta_1s, y = beta1_hat)) +
+  geom_point() +
+  labs(
+    title = "Average estimates of Beta1_hat across true Beta1's when the null is rejected",
+    x = "Beta 1",
+    y = "Beta1_hat"
+  )
+```
+
+The sample average of beta1_hat across tests for which the null is rejected are generally further away from true beta1. This is because our true beta1's are relatively small while the larger the absolute value of beta1, the larger the effect size, and the more likely the null hypothesis is to be rejected. It's more likely to be significant because larger effect sizes are less likely due to chance (and as we saw above, increase power)
