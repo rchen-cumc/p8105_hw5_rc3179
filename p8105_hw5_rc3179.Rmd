@@ -34,11 +34,6 @@ iris_with_missing = iris %>%
 
 iris_with_missing = iris_with_missing %>% janitor::clean_names()
 
-# iris_with_missing %>% 
-#   mutate(
-#     sepal_length = iris_with_missing$sepal_length %>% replace_na(mean(sepal_length, na.rm = TRUE))
-#   )
-
 fill_missing = function(x) {
   if (is.numeric(x)) {
     x = x %>% replace_na(mean(x, na.rm = TRUE))
@@ -56,3 +51,41 @@ iris_filled =
 iris_filled
 ```
 
+## Problem 2
+
+```{r}
+study_pts = 
+  list.files(path = "./data") %>% 
+  enframe(name = NULL, value = "path") %>% 
+  mutate(        #read in every CSV using map after appending ./data/ to get correct path
+    path = str_c("./data/",path),
+    data = map(path, read_csv, col_types = "dddddddd")
+  ) %>% 
+  unnest(data) %>%    #un-nest all weeks of data
+  mutate(     #extract patient ID and experiment arm
+    patient_id = substr(path, 12, 13),
+    arm = substr(path, 8, 10)
+  ) %>% 
+  select(-path) %>% 
+  pivot_longer(     #makes data more tidy for analysis
+    week_1:week_8,
+    names_to = "week",
+    values_to = "outcome"
+  ) %>% 
+  mutate(
+    week = as.numeric(substr(week, 6,6))
+  )
+
+study_pts
+```
+
+```{r}
+study_pts %>% 
+  ggplot(aes(x = week, y = outcome, color = patient_id)) +
+  geom_line() +
+  facet_grid(~arm)
+```
+
+For whatever the outcome is, the patients in the experimental arm seem to have increasing values over time, a positive correlation with the experimental exposure over time. The control arm appears to have slightly lower values at baseline and have no clear correlation (or slightly negative correlation) over time.
+
+## Problem 3
